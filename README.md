@@ -1,52 +1,56 @@
-# Student Record Management System
+# Online Quiz Application
 
-A simple full-stack student record application built with React and Spring Boot.
+A multiple-choice quiz app built with React, Vite, Spring Boot and H2.
 
 ## Requirements
 
 - Java 17 or later
-- Node.js 20 or later
 - Maven
+- Node.js 20 or later
 
-## Backend
+## Run the backend
 
-From the `backend` folder, run:
+Open a terminal in `backend` and run:
 
 ```bash
 mvn spring-boot:run
 ```
 
-The backend runs at `http://localhost:8080`.
+Spring Boot starts on port 8080. The H2 database is initialized with five sample questions when the application starts for the first time.
 
-Student API: `http://localhost:8080/api/students`
+## Run the frontend
 
-The application uses an H2 file database. Records are kept in `backend/data`.
-
-## Frontend
-
-From the `frontend` folder, run:
+Open another terminal in `frontend` and run:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the local URL shown by Vite.
-
-## Features
-
-- Add students
-- View student records
-- Edit student details
-- Delete students
-- Search by roll number
-- Show the total number of students
-- Validate required fields, unique roll numbers, and marks from 0 to 100
+Open the local address printed by Vite. Requests beginning with `/api` are proxied to Spring Boot.
 
 ## API
 
-- `GET /api/students`
-- `GET /api/students/{id}`
-- `POST /api/students`
-- `PUT /api/students/{id}`
-- `DELETE /api/students/{id}`
+- `GET /api/questions` returns question text and options without correct answers.
+- `POST /api/submit` accepts an answers object and returns the score and answer review.
+
+Example submission:
+
+```json
+{
+  "answers": {
+    "1": "B",
+    "2": "A"
+  }
+}
+```
+
+## Features
+
+- Five multiple-choice questions
+- One selected answer per question
+- Loading and error states
+- Score calculation on the backend
+- Review of selected and correct answers after submission
+- Retake quiz option
+- Responsive layout
