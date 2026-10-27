@@ -1,223 +1,172 @@
-import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: "http://localhost:8080/api/students"
-});
-
-const emptyForm = {
-  name: "",
-  rollNumber: "",
-  branch: "",
-  marks: ""
-};
+import { useEffect, useState } from "react";
 
 export default function App() {
-  const [students, setStudents] = useState([]);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null);
-  const [search, setSearch] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [questions, setQuestions] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const loadStudents = async () => {
+  const loadQuestions = async () => {
+    setLoading(true);
+    setError("");
+    setResult(null);
+    setAnswers({});
     try {
-      const response = await api.get("");
-      setStudents(response.data);
-      setError("");
-    } catch {
-      setError("Could not connect to the backend. Make sure Spring Boot is running.");
+      const response = await fetch("/api/questions");
+      if (!response.ok) throw new Error("Could not load quiz questions.");
+      const data = await response.json();
+      setQuestions(data);
+    } catch (err) {
+      setError(err.message || "Could not connect to the server. Check that the backend is running.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadStudents();
+    loadQuestions();
   }, []);
 
-  const filteredStudents = useMemo(() => {
-    const value = search.trim().toLowerCase();
-    if (!value) return students;
-    return students.filter((student) =>
-      student.rollNumber.toLowerCase().includes(value)
-    );
-  }, [students, search]);
-
-  const handleChange = (event) => {
-    setForm({ ...form, [event.target.name]: event.target.value });
-    setMessage("");
-    setError("");
+  const chooseAnswer = (questionId, option) => {
+    if (result) return;
+    setAnswers((current) => ({ ...current, [questionId]: option }));
   };
 
-  const resetForm = () => {
-    setForm(emptyForm);
-    setEditingId(null);
-  };
-
-  const handleSubmit = async (event) => {
+  const submitQuiz = async (event) => {
     event.preventDefault();
-    setMessage("");
+    if (Object.keys(answers).length !== questions.length) {
+      setError("Please answer every question before submitting.");
+      return;
+    }
+
+    setSubmitting(true);
     setError("");
-
-    if (!form.name.trim() || !form.rollNumber.trim() || !form.branch.trim()) {
-      setError("Please fill in all fields.");
-      return;
-    }
-
-    const marks = Number(form.marks);
-    if (form.marks === "" || !Number.isFinite(marks) || marks < 0 || marks > 100) {
-      setError("Marks must be between 0 and 100.");
-      return;
-    }
-
-    const student = {
-      name: form.name.trim(),
-      rollNumber: form.rollNumber.trim(),
-      branch: form.branch.trim(),
-      marks
-    };
-
     try {
-      if (editingId === null) {
-        await api.post("", student);
-        setMessage("Student added successfully.");
-      } else {
-        await api.put(`/${editingId}`, student);
-        setMessage("Student updated successfully.");
-      }
-      resetForm();
-      await loadStudents();
+      const response = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Could not submit the quiz.");
+      setResult(data);
     } catch (err) {
-      setError(err.response?.data?.message || "Could not save the student.");
+      setError(err.message || "Something went wrong while submitting.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const editStudent = (student) => {
-    setForm({
-      name: student.name,
-      rollNumber: student.rollNumber,
-      branch: student.branch,
-      marks: String(student.marks)
-    });
-    setEditingId(student.id);
-    setMessage("");
-    setError("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  if (loading) {
+    return <main className="state-page"><div className="loader" /><p>Getting your quiz ready...</p></main>;
+  }
 
-  const deleteStudent = async (student) => {
-    if (!window.confirm(`Delete ${student.name}'s record?`)) return;
-
-    try {
-      await api.delete(`/${student.id}`);
-      setMessage("Student deleted successfully.");
-      if (editingId === student.id) resetForm();
-      await loadStudents();
-    } catch {
-      setError("Could not delete the student.");
-    }
-  };
+  if (error && questions.length === 0) {
+    return (
+      <main className="state-page">
+        <div className="state-icon">!</div>
+        <h1>Quiz unavailable</h1>
+        <p>{error}</p>
+        <button className="button primary" onClick={loadQuestions}>Try again</button>
+      </main>
+    );
+  }
 
   return (
     <main className="page">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">STUDENT PORTAL</p>
-          <h1>Student Records</h1>
-          <p className="subtitle">Manage student details in one place.</p>
+      <header className="hero">
+        <div className="brand"><span className="brand-mark">Q</span><span>quickquiz</span></div>
+        <div className="hero-copy">
+          <p className="eyebrow">TEST YOUR KNOWLEDGE</p>
+          <h1>A little challenge.<br /><span>A lot to learn.</span></h1>
+          <p className="hero-text">Take a few minutes, trust what you know, and see how you do.</p>
         </div>
-        <div className="total">
-          <span>Total students</span>
-          <strong>{students.length}</strong>
+        <div className="hero-art" aria-hidden="true">
+          <div className="art-circle circle-one" />
+          <div className="art-circle circle-two" />
+          <div className="art-card"><span>✦</span><strong>Think<br />clearly.</strong></div>
         </div>
       </header>
 
-      <section className="panel">
-        <div className="section-title">
+      <section className="quiz-area">
+        <div className="quiz-heading">
           <div>
-            <p className="eyebrow">{editingId === null ? "NEW RECORD" : "EDIT RECORD"}</p>
-            <h2>{editingId === null ? "Add a student" : "Update student"}</h2>
+            <p className="eyebrow">YOUR QUIZ</p>
+            <h2>{result ? "Here's how you did" : "Ready when you are"}</h2>
           </div>
+          <div className="question-count"><strong>{questions.length}</strong><span>questions</span></div>
         </div>
 
-        <form className="student-form" onSubmit={handleSubmit}>
-          <label>
-            Student name
-            <input name="name" value={form.name} onChange={handleChange} placeholder="Enter full name" />
-          </label>
-          <label>
-            Roll number
-            <input name="rollNumber" value={form.rollNumber} onChange={handleChange} placeholder="Enter roll number" />
-          </label>
-          <label>
-            Branch
-            <input name="branch" value={form.branch} onChange={handleChange} placeholder="e.g. CSE" />
-          </label>
-          <label>
-            Marks
-            <input name="marks" type="number" min="0" max="100" value={form.marks} onChange={handleChange} placeholder="0–100" />
-          </label>
-          <div className="form-actions">
-            <button className="primary" type="submit">{editingId === null ? "Add student" : "Save changes"}</button>
-            {editingId !== null && <button className="secondary" type="button" onClick={resetForm}>Cancel</button>}
-          </div>
-        </form>
-
-        {message && <p className="notice success">{message}</p>}
-        {error && <p className="notice error">{error}</p>}
-      </section>
-
-      <section className="panel">
-        <div className="list-header">
-          <div>
-            <p className="eyebrow">RECORDS</p>
-            <h2>All students</h2>
-          </div>
-          <input className="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search roll number" />
-        </div>
-
-        {loading ? (
-          <p className="empty">Loading students...</p>
-        ) : filteredStudents.length === 0 ? (
-          <div className="empty">
-            <strong>{students.length === 0 ? "No students added yet" : "No matching students"}</strong>
-            <p>{students.length === 0 ? "Add the first record using the form above." : "Try searching with another roll number."}</p>
-          </div>
+        {result ? (
+          <section className="result-panel">
+            <div className="score-circle">
+              <strong>{result.score}</strong>
+              <span>of {result.total}</span>
+            </div>
+            <p className="eyebrow">QUIZ COMPLETE</p>
+            <h2>{result.score === result.total ? "Perfect score!" : result.score >= result.total / 2 ? "Nice work!" : "Keep practising!"}</h2>
+            <p className="result-description">You got {result.score} out of {result.total} questions correct.</p>
+            <div className="review-list">
+              {result.review.map((item, index) => (
+                <article className={item.correct ? "review-item right" : "review-item wrong"} key={item.questionId}>
+                  <div className="review-number">{String(index + 1).padStart(2, "0")}</div>
+                  <div className="review-content">
+                    <h3>{item.question}</h3>
+                    <p>Your answer: <strong>{item.selectedAnswer ? item.selectedAnswer + ". " + item.selectedText : "Not answered"}</strong></p>
+                    {!item.correct && <p className="correct-answer">Correct answer: <strong>{item.correctAnswer}. {item.correctText}</strong></p>}
+                  </div>
+                  <span className="review-status">{item.correct ? "Correct" : "Review"}</span>
+                </article>
+              ))}
+            </div>
+            <button className="button primary retake" onClick={loadQuestions}>Try the quiz again <span>↗</span></button>
+          </section>
         ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Roll number</th>
-                  <th>Branch</th>
-                  <th>Marks</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map((student) => (
-                  <tr key={student.id}>
-                    <td className="student-name">{student.name}</td>
-                    <td>{student.rollNumber}</td>
-                    <td><span className="branch">{student.branch}</span></td>
-                    <td>{student.marks}/100</td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="edit" onClick={() => editStudent(student)}>Edit</button>
-                        <button className="delete" onClick={() => deleteStudent(student)}>Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <form onSubmit={submitQuiz}>
+            <div className="progress-row">
+              <span>{Object.keys(answers).length} of {questions.length} answered</span>
+              <div className="progress-track"><div style={{ width: `${(Object.keys(answers).length / Math.max(questions.length, 1)) * 100}%` }} /></div>
+            </div>
+            <div className="question-list">
+              {questions.map((question, index) => (
+                <article className="question-card" key={question.id}>
+                  <div className="question-top">
+                    <span className="question-number">QUESTION {String(index + 1).padStart(2, "0")}</span>
+                    <span className="point-label">1 point</span>
+                  </div>
+                  <h3>{question.text}</h3>
+                  <div className="options">
+                    {question.options.map((option) => (
+                      <label className={`option ${answers[question.id] === option.key ? "selected" : ""}`} key={option.key}>
+                        <input
+                          type="radio"
+                          name={`question-${question.id}`}
+                          value={option.key}
+                          checked={answers[question.id] === option.key}
+                          onChange={() => chooseAnswer(question.id, option.key)}
+                        />
+                        <span className="option-key">{option.key}</span>
+                        <span className="option-text">{option.text}</span>
+                        <span className="option-check">{answers[question.id] === option.key ? "✓" : ""}</span>
+                      </label>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+            {error && <p className="error-message">{error}</p>}
+            <div className="submit-row">
+              <p>Your score will appear after you submit your answers.</p>
+              <button className="button primary" type="submit" disabled={submitting}>
+                {submitting ? "Checking answers..." : "Submit quiz"} <span>↗</span>
+              </button>
+            </div>
+          </form>
         )}
       </section>
-      <footer>Student Record Management System</footer>
+      <footer><span>quickquiz</span><span>Learn something new every day.</span></footer>
     </main>
   );
 }
